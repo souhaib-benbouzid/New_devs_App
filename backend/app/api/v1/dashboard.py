@@ -1,7 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException
 from typing import Dict, Any, List
+from decimal import Decimal, ROUND_HALF_UP
 from app.services.cache import get_revenue_summary
 from app.core.auth import authenticate_request as get_current_user
+from decimal import Decimal
 
 router = APIRouter()
 
@@ -20,7 +22,8 @@ TENANT_PROPERTIES = {
     ],
 }
 
-
+# Note: In a real application, properties would be fetched from the database with tenant filtering, but for this we are requested not to change the code structure, so we are using a static mapping.
+# eg: SELECT id, name FROM properties WHERE tenant_id = :tenant_id
 @router.get("/dashboard/properties")
 async def get_dashboard_properties(
     current_user: dict = Depends(get_current_user),
@@ -38,13 +41,19 @@ async def get_dashboard_summary(
     
     tenant_id = getattr(current_user, "tenant_id", "default_tenant") or "default_tenant"
     
+    # Verify the property belongs to this tenant
+    tenant_props = TENANT_PROPERTIES.get(tenant_id, [])
+    if not any(p["id"] == property_id for p in tenant_props):
+        raise HTTPException(status_code=403, detail="Property does not belong to your tenant")
+    
     revenue_data = await get_revenue_summary(property_id, tenant_id)
     
-    total_revenue_float = float(revenue_data['total'])
-    
+    # Round precisely in Decimal (base-10) before converting to float for JSON
+    total_revenue = Decimal(revenue_data['total']).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+   
     return {
         "property_id": revenue_data['property_id'],
-        "total_revenue": total_revenue_float,
+        "total_revenue": float(total_revenue),
         "currency": revenue_data['currency'],
         "reservations_count": revenue_data['count']
     }
