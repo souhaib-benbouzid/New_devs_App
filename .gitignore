@@ -1,0 +1,6 @@
+# Ignore Python bytecode caches
+__pycache__/
+
+# Byte-compiled / optimized / DLL files
+*.py[cod]
+*$py.class
